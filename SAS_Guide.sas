@@ -1,10 +1,10 @@
-	/* This is an SAS Guide. */
+	/* This is a SAS Guide. */
 	
 	/* SET UP */
 	/* First you need to specify a location and name for your new library. */
 	
 %let path=FILEPATH;
-libname orion "&path"; 
+libname libref "&path"; 
 
 	/* COMMENTING */
 
@@ -23,7 +23,7 @@ run;
 
 	/* To view a library in its entirety, do something like this. */
 	
-proc contents data=libref._ALL_;
+proc contents data=libref._all_;
 run;
 
 	/* You can also view the library without descriptions by typing 'nods' after '_ALL_' */
@@ -66,7 +66,8 @@ run;
 	
 proc print data=libref.dataset;
 	var variable_1 variable_2 variable_3;
-	where variable_1<2000 and variable_2 contains 'nyan';
+	where variable_1<2000 and 
+		  variable_2 contains 'nyan';
 	sum variable_1;
 run;
 
@@ -125,7 +126,8 @@ footnote;
 	the standard variable names. That could get gross really fast. You must include 'label' in your proc statement. */
 	
 proc print data=libref.dataset label noobs;
-	where variable_1<2000 and variable_2 contains 'nyan';
+	where variable_1<2000 and 
+	      variable_2 contains 'nyan';
 	label variable_1='Number_of_Nyans'
 		  variable_2='Number_of_Cats';
 	var variable_1 variable_2 variable_3;
@@ -153,6 +155,7 @@ proc format;
 				   'WHT'='White_Cat';
 				   'ORG'='Orange_Cat';
 				   'BLK'='Black_Cat';
+				   'GRY'='Gray_Cat';
 				   'Other'='Miscoded';
 run;
 
@@ -178,3 +181,160 @@ proc print data=libref.dataset label;
 	var variable_1 variable_2 variable_3;
 	format variable_2 mmddyy10. variable_2 tiers. variable_3 dollar10.;
 run;
+
+	/* READING, CREATING, AND WORKING WITH DATASETS */
+	
+	/* A SAS 'data' step can read SAS data sets, raw data files, and Microsoft Excel spreadsheets. To create a new SAS dataset 
+	from an existing dataset, use the 'DATA' step. You still need to run 'proc print' to view the new dataset. */
+	
+data newlibref.newdataset; /* new dataset */
+	set libref.dataset; /* the existing SAS dataset that will be read in as input data */
+	where variable_1<2000 and 
+	      variable_2 contains 'nyan'; /* subsetting is totally a thing */ 
+run;
+
+proc print data=newlibref.newdataset;
+run;
+	
+	/* We will certainly need to compare calendar dates and SAS date values when working in SAS. The way to do this is through a SAS
+	date constant, which are written in the following form: "ddmmm<yy>yy'D". The year can be two or four digits. SAS automatically
+	converts date constants into SAS date values. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	where variable_2<'14feb1992'd; /* don't forget the letter d at the end AFTER the quotes */
+run;
+
+	/* Let's create a new variable using the assigment statement. This statement can also be used to assign new values. The assignment 
+	statement evaluates an expression and assigns the result to a new or existing variable. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	where variable_2<'14feb1992'd
+	      variable_1 between 3 and 9 and
+		  variable_4 contains 'BRN';
+	coupon=variable_1*.05;
+run;
+
+proc print newlibref.newdataset;
+	var variable_1 variable_2 variable_5 coupon;
+	id variable_5;
+run;
+
+	/* Note: set var1 = missing value and set var2 = 10. In SAS, num=var1+var2/2 equals a missing value, not 5. */
+
+	/* You can use the 'drop' and 'keep' statements to, well, drop and keep variables in your data step. They have no effect on the 
+	input dataset and only affect the new dataset you create. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	drop variable_1 variable_4;
+run;
+
+	/* or... */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	coupon=variable_1*.05;
+	keep variable_2 variable_3 coupon; /* note that we had to include the new variable */
+run;
+	
+	/* Any new variables created in the data step, like coupon above, cannot be used in a where statement that is nested in the data
+	step. This is because that variable does not exist in libref.dataset and instead is created and included in newlibref.newdataset. */
+	
+	/* If statements! Highly useful. You can't use where operators (such as between, and, like, etc.) in an if statement. When using the 
+	if statement to subset the data step, SAS excludes any observations where the if statement is false. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if variable_1>=5;
+run;
+
+proc print newlibref.newdataset;
+run;
+
+	/* So when should we use a where statement and when should we use an if statement? If you are subsetting data in the proc step,
+	you should use a where statement. If you are subsetting data in the data step, then you can use the if AND where statements. However, 
+	when you use the where statement in the data step, the where statement must only reference variables in the input dataset. */
+	
+	/* When using the label statement in the proc step, the labels are temporary. However, using the label statement in a data step assigns
+	permanent labels to the variables. You have to include label in the proc print step to show these new labels. You can also use the 
+	format statement to permanently apply formats to the values in the new dataset. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	label variable_1='Number_of_Nyans';
+	format variable_2 mmddyy10.;
+run;
+
+proc contents newlibref.newdataset;
+run;
+
+proc print newlibref.newdataset label;
+run;
+
+	/* READING SPREADSHEET AND DATABASE DATA */
+	
+	/* SAS has many engines used to access data outside of the SAS environment, such as for Excel and Oracle data. If the bitness of
+	the SAS environment and the database environment differ (32 bit vs. 64 bit), then the pcfiles engine must be used to access data. 
+	Note: if you are using a client application to access SAS on a remote server, you cannot use the SAS/ACCESS pcfiles statement. The 
+	next few examples use the SAS windowing environment. */
+	
+libname libref engine path="%path/excelfile.xls"; /* engine could be pcfiles (for Excel files) or oracle, for example */
+
+proc contents data=libref._all_;
+run;
+
+	/* There are additional attributes used for Oracle databases to take username and passwords into account. */
+	
+libname libref engine user=username pw=password path=path_to_database schema=oracle_schema; /* engine would be oracle in this case */
+
+proc print data=oralib.database; /* note 'oralib' */
+run;
+
+	/* SAS imports Excel worksheets with a $ sign included in their name. SAS datasets cannot contain special characters, so we must 
+	refer to them in a special way to account for this lapse in programming. Why SAS does not automatically take care of this issue 
+	is anyone's guess, but I digress... */
+	
+proc print data=libref. 'path/to.excelworksheet$'n;
+run;
+
+	/* The where statements are also a litte different when working with Excel files. */
+	
+proc print data=libref. 'excelworksheet$'n;
+	where variable_4 ? 'BRN';
+run;
+
+	/* To disassociate a libref, do the follwing. */
+	
+libname libref clear;
+
+	/* Note: when a date value is read from an Excel worksheet, values are automatically converted to a SAS date and the DATE9 format
+	is applied to display those values. */
+
+	/* Let's create a SAS dataset from an Excel worksheet. This exercise is similar to the previous examples that used the data step. */
+	
+data newlibref.newdataset;
+	set libref. 'excelworksheet$'n;
+	where variable_4 contains 'BRN'; /* subsetting is totally a thing */
+	/* you can still create new variables, assign labels, and format variables. */
+run;
+
+proc contents data=newlibref.newdataset;
+run;
+
+proc print data=newlibref.newdataset; /* remember to include 'label' if you want to use assigned labels. */
+run;
+
+libname libref clear;
+
+	/* You can also create a new Excel workbook in SAS and assign data to worksheets. */
+	
+
+libname libref excel 'path/to/excelworksheet.xls'; /* engine here is 'excel' */
+
+data new.excelworksheet;
+   set sas.dataset;
+run;
+
+libname libref clear;
