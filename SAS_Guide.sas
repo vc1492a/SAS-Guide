@@ -338,3 +338,102 @@ data new.excelworksheet;
 run;
 
 libname libref clear;
+
+	/* READING RAW DATA FILES */
+	
+	/* A raw data files can be a text file, csv file, or ASCII file. Fields can be deliminited or arranged in fixed columns. 
+	We can use the data step to read raw data. albiet with a few alterations from what we have done previously. SAS reads fields 
+	in the order in which they appear in the raw data files, so you cannot skip over fields. The defualt length for ALL variables 
+	is 8 characters, regardless of type. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat' dlm=','; /* here you specify the file and fileformat, and also the delimiter used in the raw data */
+	input variable_1 $
+		  variable_2 $
+		  variable_3 $; /* where you describe the arrangement of the data & specify variable names for the new dataset */
+run;
+
+	/* We can use the length statement to alter the data step and specify the correct length for certain variables. 
+	The length statement must precede the input statement. */
+	
+data newlibref.newdataset;
+	length variable_1 $ variable_2 $ 12 variable_3 $ 5; /* this assigns length 12 to var1 and var 2 and length 5 to var3 */
+	infile '%path/file.fileformat' dlm=','; /* here you specify the file and fileformat, and also the delimiter used in the raw data */
+	input variable_1 $
+		  variable_2 $
+		  variable_3 $; /* where you describe the arrangement of the data & specify variable names for the new dataset */
+run;
+
+	/* Running the above code on numeric variables will actually cause SAS to read both variable_1 and variable_2 as character 
+	variables. If variable_1 is a numeric variable and also has a length of 8 (or something else), it needs to be read in this way. */
+	
+data newlibref.newdataset;
+	length variable_1 8 variable_2 $ 12 variable_3 $ 5; /* this assigns length 12 to var1 and var 2 and length 5 to var3 */
+	infile '%path/file.fileformat' dlm=','; 
+	input variable_1 $
+		  variable_2 $
+		  variable_3 $;
+run;
+	
+	/* Date values are non-standard values in SAS, so reading this data requires a bit more work. The code below reads both standard 
+	and non-standard data. The colon format causes SAS to read up to the delimiter and also specifies a length. Omitting the colon 
+	will cause SAS to continue reading for that specified length, ignoring the delimiter. 
+	
+	This 'thing' after the variable name is called an informat. All informats use a dollar sign ($) for character formats, followed 
+	by the name of the informat, an optional width (e.g. 8), followed by a period (.). */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat' dlm=','; 
+	input variable_1 :$12. /* note the colon. */
+		  variable_2 $
+		  variable_3 $; 
+run;
+
+	/* an informat, like the above code, is required to read non-standard numeric data. We can use the date. informat to read 
+	dates, which are recorded in the ddmmmyy or ddmmmyyyy formats. The mmddyy. informat reads dates as mmddyy or mmddyyyy. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat' dlm=',';
+	input date_format_1 :date.
+		  date_format_2 :mmddyy.;
+run;
+
+	/* Reading instream data requires the use of the datalines statement, which is placed as the last statement in the data step 
+	and precedes the instream data. You use a semi-colon (;) after the instream data to indicate the end of the dataline. */
+	
+data newlibref.newdataset;
+	infile datalines dlm=','; /* specify the delimiter like this when working with raw data */
+	input variable_1 variable_2 $ variable_3;
+	datalines;
+	5 02/28/2015 $25;
+	3 07/03/2014 $15;
+;
+
+proc print newlibref.newdataset;
+run;
+
+	/* Validating data is a necessary skill. When loading raw data, missing entries (indicated by consecutive delimiters) will cause
+	SAS to 'shift' values of an observation leftward, placing variable values in incorrect columns. Using the DSD option sets the 
+	default delimiter to a comma, treats consecutive delimiters as missing values, and enables SAS to read values with embedded 
+	delimiters. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat' dsd; /* dsd instead of dlm='delimiter' */
+	input date_format_1 :date.
+		  date_format_2 :mmddyy.;
+run;
+
+proc print newlibref.newdataset;
+run;
+
+	/* dsd cannot be used for missing data in the last entry (column) of a raw data file, because the data is not marked with 
+	consecutive delimiters. The missover option is what we need. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat' dlm=',' missover; /* missover used here */
+	input date_format_1 :date.
+		  date_format_2 :mmddyy.;
+run;
+
+proc print newlibref.newdataset;
+run;	
