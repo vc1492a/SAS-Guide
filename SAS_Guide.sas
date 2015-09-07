@@ -1,5 +1,7 @@
 	/* This is a SAS Guide. */
 	
+	/* Note: this is not intended as a direct replacement for formal instruction/study of SAS. */
+	
 	/* SET UP */
 	/* First you need to specify a location and name for your new library. */
 	
@@ -224,7 +226,9 @@ run;
 	/* Note: set var1 = missing value and set var2 = 10. In SAS, num=var1+var2/2 equals a missing value, not 5. */
 
 	/* You can use the 'drop' and 'keep' statements to, well, drop and keep variables in your data step. They have no effect on the 
-	input dataset and only affect the new dataset you create. */
+	input dataset and only affect the new dataset you create. Additionally, SAS stores the drop and keep variables in the PDV, 
+	meaning that they are available for processing even after being dropped (meaning you can create new variables from a 
+	variable that you wish to drop later). */
 	
 data newlibref.newdataset;
 	set libref.dataset;
@@ -436,4 +440,268 @@ data newlibref.newdataset;
 run;
 
 proc print newlibref.newdataset;
+run;
+
+	/* MANIPULATING DATA */
+	
+	/* We can use the sum function to add numeric values in assignment statements. The arguments must be enclosed by parentheses
+	and seperated by commas. The sum function ignores missing values when present. Using the sum function will allow addition 
+	even with missing values (e.g. 500 + . = 500, not .), so use it when you can. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_6 = sum(variable_1, variable_2);
+run;
+
+	/* Date functions (year, qtr, month, day, weekday) are highly useful. They manipulate data values and return SAS values 
+	that are also easy to understand to a human. To call the current date, you can use: today() or date(). */ 
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_6 = sum(variable_1, variable_2);
+	variable_7 = month(date_variable);
+run;
+
+	/* if/then statements are extremely useful. It's a conditional statement that executes when meeting specific conditions. It's 
+	highly useful for conditional processing of data. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if variable_1>=5 then
+		nyan_count = 5 + 1; /* I am aware that these statements don't make logical sense but the concept is illustrated */
+	if variable_4='BRN' then
+		brown_cat = 1;
+run;
+
+proc print newlibref.newdataset;
+run;
+
+	/* if/else statements are even cooler than if/then statements. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if variable_1>=5 then
+		nyan_count = 5 + 1;
+	else if variable_1<5 then
+		nyan_count = 5 - 1;
+run;
+
+	/* when writing if/then and if/else statements, you can use logical operators (and, or, not, etc.) to create compound 
+	conditions. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if variable_1>5 or
+	   variable_1<4 then
+	   nyan_count = 10;
+	else nyan_count = 4.5;
+run;
+	
+	/* The upcase function converts all letters in an argument to uppercase. This saves you from writing a conditional if 
+	statement if you have data that is stored in both uppercase and lowercase characters. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_4 = upcase('BRN');
+	if variable_4='BRN' then
+	   brown_cat = 1;
+	else brown_cat = 0;
+run;
+
+	/* Do statements allow you to execute multiple statements when a variable meets the condition or conditions 
+	specified by an if/else or if/then statement. This can be extremely useful in batch processing or 
+	other tasks. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if variable_1>5 then
+		do;
+			nyan_count = 5 + 1;
+			cat_count = 1;
+		end;
+	else if variable_1<5 then
+		do;
+			nyan_count = 5 - 1;
+			cat_count = 0;
+		end;
+run;
+
+	/* COMBINING SAS DATASETS */
+	
+	/* Deciding which method is the best for combining datasets involves knowing the contents and the structure 
+	of your input datasets. When combining datasets vertically, you need to make sure the datasets have 
+	common variables. We can use the data step to combine datasets in SAS. Below is an example of how to 
+	combine datasets with common variables. */
+	
+data newlibref.newdataset;
+	set dataset_1 dataset_2; /* the datasets to be combined */
+run;
+
+	/* To combine datasets with different variables, we need to do a bit more work and use the rename statement. */
+	
+data newlibref.newdataset;
+	set dataset_1(rename=(old_variable_2=variable_2))
+	    dataset_2(rename=(old_variable_1=variable_1));
+run;
+
+	/* In many cases, you will want to merge two datasets that contain one or more common variables. This is 
+	called match-merging. Types of merges include one-to-one, one-to-many, and non-match merges. Instead of the 
+	set statement, we would use the merge statement, which joins observations from two or more SAS datasets. 
+	The below code will execute a merge for both one-to-one and one-to-many relatioships between variables. */
+	
+data newlibref.newdataset;
+	merge dataset_1 dataset_2;
+	by variable_1; /* variable that datasets will be merged by */
+run;
+	
+	/* You can use the in=variable statement to identify which input datasets contributed to each observation in 
+	your output. SAS creates a binary variable where 0=not_included, 1=included. /*
+	
+data newlibref.newdataset;
+	merge dataset_1(in=d1) /* d1 is where SAS stored the binary variable */
+		  dataset_2(in=d2); /* d2 is where SAS stored the binary variable */
+	by variable_1;
+run;
+
+	/* Selecting non-matches from one of the datasets is also pretty straight-forward. */
+	
+data newlibref.newdataset;
+	merge dataset_1(in=d1)
+		  dataset_2(in=d2);
+	by variable_1;
+	if d1=1 and d2=0; /* this will force SAS to include only non-matches present in dataset_1 */
+run;
+
+	/* Alternatively, we could change the if statement to include non-matches present in either dataset */
+	
+data newlibref.newdataset;
+	merge dataset_1(in=d1)
+		  dataset_2(in=d2);
+	by variable_1;
+	if d1=1 or d2=0; /* or statement instead of and */
+run;
+
+	/* CREATING SUMMARY REPORTS */
+	
+	/* Your non-analyst boss will want to see this stuff. The proc freq statement can be used to generate 
+	frequency tables of your data. /*
+	
+proc freq data=libref.dataset;
+	tables variable_1 variables_2; /* frequency tables to be produced */
+	where variable_4='BRN';
+run;
+	
+	/* What if you want to suppress some of the statistics? You can use several options to suppress 
+	summary statistics from the frequency table. /nocum suppresses cumulative frequency and /nopercent 
+	suppresses the display of all percentages. When specifying multiple options, you seperate them
+	with a space. */ 
+	
+proc freq data=libref.dataset;
+	tables variable_1/nocum nopercent variable_2;
+	where variable_4='BRN';
+run;
+
+	/* Showing all frequencies of a variable in a report is probably not a good idea for numeric variables. 
+	We can improve our frequency reporting by using formats. */
+	
+proc format;
+	value tiers low-<10='Tier1'
+				10-20='Tier2'
+				20<-high='Tier3';
+run;
+
+proc freq data=libref.dataset;
+	tables variable_1;
+	format variable_1 tiers.;
+run;
+
+	/* Finding the frequency of a variable by another is pretty straight forward. */
+
+proc sort data=libref.dataset;
+		out=sorted_dataset;
+	by variable_2;
+run;
+	
+proc freq data=sorted_dataset;
+	tables variable_1;
+	by variable_2;
+run;
+
+	/* Let's create a cross-tabulation table so we can view statistics for each distinct combination of 
+	values of the selected variables in one table. To do this, we just specify an asterisk (*) in 
+	between the variable names. The first variable specifies the rows and the second specifies the 
+	columns. */
+	
+proc freq data=libref.dataset;
+	tables variable_1*variable_2; /* row by column */
+run;
+
+	/* You cannot use the nocum option in a cross-tabulation table but you can suppress the percentage 
+	data. Other options are /nofreq, /norow, and /nocol. */
+	
+proc freq data=libref.dataset;
+	tables variable_1*variable_2/nopercent; 
+run;
+
+	/* We can specify additional options in the tables statement that will alter the formatting of 
+	the frequency table. Some of these options are /list and /crosslist. */
+
+proc freq data=libref.dataset;
+	tables variable_1*variable_2/list; 
+run;
+
+	/* The datasets may include invalid, missing, or duplicate data values. Proc freq can be used to 
+	in these scenarios. The below cose identifies duplicate values and displays them at the top of 
+	the frequency table. Another option is to use the nlevels option. */
+	
+proc freq data=libref.dataset order=freq;
+	tables variable_1;
+run;
+	
+proc freq data=libref.dataset nlevels;
+	tables variable_1;
 run;	
+
+	/* Proc means reports the number of non-missing values, the mean, the standard deviation, min, 
+	and max of every numeric variable in a dataset. By using the class statement in the proc 
+	means step, you can create more granular proc means reports. */
+	
+proc means libref.dataset;
+	var variable_1 variable_2;
+	class variable_1 /* these are class variables and are character or numeric with few discrete values */
+run;
+
+	/* To specify specific descriptive statistics, you can do the following. */
+	
+proc means libref.dataset min max sum;
+	var variable_1 variable_2;
+run;
+
+	/* To specify the number of decimal places in the proc means output, use the maxdec=X option. 
+	Additionally, the nmiss option will show the number of observations with missing values for 
+	each variable in the dataset. */
+	
+proc means libref.dataset n nmiss min max sum maxdec=2;
+	var variable_1 variable_2;
+run;
+
+	/* Proc univariate is useful for detecting outliers in the data. The syntax is very similar to 
+	proc means. */
+	
+proc univariate data=libref.dataset;
+	var variable_1 variable_2; /* must be numerical variables */
+run;
+
+	/* The SAS output delivery system allows for the distribution of reports in formats other than 
+	SAS output, such as a PDF document, Excel spreadsheet, word document, or web page. You can 
+	export to multiple destinations in one procedure. */
+	
+ods fileformat_1 file="path/to/file";/* file format could be pdf */ 
+ods fileformat_2 file="path/to/file";/* file format could be xml */ 
+
+proc means libref.dataset n nmiss min max sum maxdec=2;
+	var variable_1 variable_2;
+run;
+
+ods fileformat_1 close;
+ods fileformat_2 close;
