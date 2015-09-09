@@ -246,6 +246,35 @@ run;
 	/* Any new variables created in the data step, like coupon above, cannot be used in a where statement that is nested in the data
 	step. This is because that variable does not exist in libref.dataset and instead is created and included in newlibref.newdataset. */
 	
+	/* You can create a new database and keep or drop certain variables from those datasets at the same time. */
+	
+data newlibref.newdataset_1(keep=variable_1)
+	 newlibref.newdataset_2(drop=variable_2);
+	 set libref.dataset;
+run;
+
+	/* You can also use the drop or keep statements with the set statement, meaning that those variables or not (or are) read. */
+	
+data newlibref.newdataset;
+	set libref.dataset(drop=variable_1);
+run;
+
+	/* A working example. */
+	
+data work.sales work.exec(drop=Manager_ID);
+	set orion.employee_organization;
+	if Department = 'Sales' then output work.sales;
+	else if Department = 'Executives' then output work.exec;
+	/* ignore all other Department values */
+	drop Department;
+run;
+
+proc print data=work.sales (firstobs=6);
+run;
+
+proc print data=work.exec (firstobs=2 obs=3);
+run;
+	
 	/* If statements! Highly useful. You can't use where operators (such as between, and, like, etc.) in an if statement. When using the 
 	if statement to subset the data step, SAS excludes any observations where the if statement is false. */
 	
@@ -393,7 +422,7 @@ data newlibref.newdataset;
 		  variable_3 $; 
 run;
 
-	/* an informat, like the above code, is required to read non-standard numeric data. We can use the date. informat to read 
+	/* An informat, like the above code, is required to read non-standard numeric data. We can use the date. informat to read 
 	dates, which are recorded in the ddmmmyy or ddmmmyyyy formats. The mmddyy. informat reads dates as mmddyy or mmddyyyy. */
 	
 data newlibref.newdataset;
@@ -440,6 +469,33 @@ data newlibref.newdataset;
 run;
 
 proc print newlibref.newdataset;
+run;
+
+	/* We can also use the @n and +n pointers to help us in reading data. @n moves the pointer to the column n, and +n moves the 
+	pointer n positions. Here's an example. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat';
+	input @1 variable_1 4.
+		  +2 variable_2 $8.;
+run;
+
+	/* SAS loads a new record into the input buffer when it encounters an input statement, by default. It is possible to have 
+	multiple input statements in one data step. This is useful when reading a raw data file with multiple records per 
+	observation and when reading an entire or subset of a raw data file with mixed record types. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat';
+	input variable_1 4.;
+	input variable_2 $8.;
+run;
+
+	/* SAS also makes use of line pointer controls. You can use / to specify which line you would like to load the raw data from. */
+	
+data newlibref.newdataset;
+	infile '%path/file.fileformat';
+	input variable_1 $30. / / /* the first / tells SAS to load the second line of raw data. The second / means the third line. */
+	input variable_2 8. / /* here, the / tells SAS to load the fourth line of raw data */
 run;
 
 	/* MANIPULATING DATA */
@@ -524,6 +580,24 @@ data newlibref.newdataset;
 			nyan_count = 5 - 1;
 			cat_count = 0;
 		end;
+run;
+
+	/* A working example. */
+	
+data work.lookup;
+	set orion.country;
+	outdated = 'N';
+	output;
+	if Country_FormerName ~= '' then /* not equal */
+		do;
+			Country_Name = Country_FormerName;
+			outdated = 'Y';
+			output;
+		end;
+	drop Country_FormerName and Population;
+run;
+
+proc print data=work.lookup;
 run;
 
 	/* COMBINING SAS DATASETS */
@@ -696,8 +770,8 @@ run;
 	SAS output, such as a PDF document, Excel spreadsheet, word document, or web page. You can 
 	export to multiple destinations in one procedure. */
 	
-ods fileformat_1 file="path/to/file";/* file format could be pdf */ 
-ods fileformat_2 file="path/to/file";/* file format could be xml */ 
+ods fileformat_1 file="path/to/file"; /* file format could be pdf */ 
+ods fileformat_2 file="path/to/file"; /* file format could be xml */ 
 
 proc means libref.dataset n nmiss min max sum maxdec=2;
 	var variable_1 variable_2;
@@ -705,3 +779,221 @@ run;
 
 ods fileformat_1 close;
 ods fileformat_2 close;
+
+	/* CONTROLLING INPUT AND OUTPUT */
+	
+	/* By default, SAS outputs a report only once at the bottom of the data step. We can take control
+	of the output, but SAS then will follow your explicit output instructions, showing no output
+	at the end of the data step. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_1 = 1;
+	variable_2 = variable_1 * (1 + variable_3);
+	output; /* comment out to hide variable_1 output */
+	variable_4 = 2;
+	variable_5 = variable_4 * (1 + variable_6);
+	output;
+run;
+
+	/* Note: Any new variables to SAS are re-initialized in the PDV. Existing variables are not 
+	re-initialized. The PDV does not re-initialize after each output statement, only in the 
+	bottom of the data step. */
+	
+	/* We may need to write to more than one dataset in a data step. */
+	
+data newlibref.newdataset_1 newlibref.newdataset_2 newlibref.newdataset_3;
+	 set libref.dataset;
+	 if variable_1 = '1' then output newlibref.newdataset_1;
+	 else if variable_2 = '2' then output newlibref.newdataset_2;
+	 else output newlibref.newdataset_3;
+run;
+
+	/* Note: typing 'else output' will cause SAS to write to all the datasets. */
+	
+	/* Specifying multiple data sets in a single output statement is also possible. */
+	
+data newlibref.newdataset_1 newlibref.newdataset_2 newlibref.newdataset_3;
+	set libref.dataset;
+	if variable_1 in ('newlibref.newdataset_1','newlibref.newdataset_2') then 
+		output newlibref.newdataset_1 newlibref.newdataset_2;
+	else output newlibref.newdataset_3;
+run;
+
+	/* Below is a working example of creating 3 new datasets based on some conditional statements. */
+	
+ data work.fast work.slow work.veryslow;
+ 	set orion.orders;
+ 	where Order_Type in (2,3);
+ 	ShipDays = Delivery_Date - Order_Date;
+ 	if ShipDays < 3 then output work.fast;
+ 	else if 5<=ShipDays<=7 then output work.slow;
+ 	else if ShipDays > 7 then output work.veryslow;
+ 	/* no output if ShipDays are 3 or 4 */
+ 	drop Employee_ID;
+ run;
+	
+	/* SUMMARIZING DATA */
+	
+	/* Let's say we want to create a variable that accumulates a running total. This will look 
+	something like this. We need to change the default behavior of SAS to do this, using the 
+	retain statement. This tells SAS to retain the values of that specific variable and gives 
+	you the ability to set an initial value. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	retain new_variable 0; /* zero is the initial value */
+	new_variable = new_variable + variable_1;
+run;
+
+	/* What if there is a missing value somewhere in the data when accumulating data? Subsequent 
+	values will be missing. There are many ways to address this function. One is to use the sum 
+	function. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	retain new_variable 0;
+	new_variable = sum(new_variable, variable_1);
+run;
+	
+	/* Yet another method for doing the same thing. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	new_variable + variable_1;
+run;
+
+	/* In the above case, it will rewrite missing values from variable_1 to 0. */
+	
+	/* A working example. */
+	
+data work.mid_q4;
+  set orion.order_fact;
+  where '01nov2008'd <= Order_Date <= '14dec2008'd;
+  retain Num_Orders 0;
+  retain Sales2Dte 0;
+  Num_Orders = Num_Orders + 1;
+  Sales2Dte = Sales2Dte + Total_Retail_Price;
+run;
+
+title 'Orders from 01Nov2008 through 14Dec2008';
+proc print data=work.mid_q4;
+  var Order_ID Order_Date Total_Retail_Price Num_Orders Sales2Dte;
+  format Sales2Dte Dollar10.2;
+run;
+title;
+
+	/* Another working example. */
+	
+data work.typetotals;
+	set orion.order_fact;
+	where '01jan2009'd <= order_date <='31dec2009'd;
+	retain TotalRetail 0;
+	retain TotalCatalog 0;
+	retain TotalInternet 0;
+	if Order_Type = 1 then
+		do;
+			TotalRetail = sum(TotalRetail, Quantity);
+		end;
+	else if Order_Type = 2 then
+		do;
+			TotalCatalog = sum(TotalCatalog, Quantity);
+		end;
+	else if Order_Type = 3 then
+		do;
+			TotalInternet = sum(TotalInternet, Quantity);
+		end;
+	keep Order_Date Order_ID TotalRetail TotalCatalog TotalInternet;
+run;
+
+proc print data=work.typetotals;
+run;
+
+	/* What if you want to accumulate totals for a group of data? First we need to 
+	sort the data then process it as before. */
+	
+proc sort data=libref.dataset out = some_sort;
+	by variable_1;
+run;
+
+data newlibref.newdataset(keep=variable_1 variable_2);
+	set some_sort;
+	by variable_1;
+	if first.variable_1 then variable_2 = 0;
+	variable_2 + variable_3;
+	if last.variable_1;
+run;
+
+	/* What if I wanted to sort with multiple by variables? */
+	
+proc sort data=libref.dataset out = some_sort;
+	by variable_1;
+run;	
+
+data newlibref.newdataset(keep=variable_1 variable_2 variable_3);
+	set some_sort;
+	by variable_1 variable_2;
+	if first.variable_1 then
+		do;
+			variable_2 = 0;
+			variable_3 = 0;
+		end;
+	variable_2 + variable_4;
+	variable_3 + 1;
+	if last.variable_1;
+	putlog /* dumps the PDV into the log */
+run;
+
+	/* A working example. */
+	
+proc sort data=orion.order_summary out=work.sumsort;
+	by Customer_ID;
+run;
+
+proc print data=work.sumsort;
+run;
+
+proc sort data=orion.order_summary out=work.sumsort;
+	by Customer_ID;
+run;
+
+data work.customers;
+	set work.sumsort;
+	by Customer_ID;
+	if first.Customer_ID then Total_Sales = 0;
+	Total_Sales = sum(Total_Sales, Sale_Amt);
+	if last.Customer_ID;
+	keep Customer_ID Total_Sales;
+run;
+
+title 'SAS YAY';
+proc print data=work.customers;
+	format Total_Sales DOLLAR11.2;
+run;
+title;
+
+	/* Another example. */
+	
+proc sort data=orion.order_qtrsum out=work.sort;
+	by Customer_ID Order_Qtr;
+run;
+
+data work.qtrcustomers;
+	set work.sort;
+	by Customer_ID Order_Qtr;
+	if first.Order_Qtr = 1 then
+		do;
+			Total_Sales = 0;
+			Num_Months = 0;
+		end;
+	Total_Sales = sum(Total_Sales, Sale_Amt);
+	Num_Months + 1;
+	if last.Order_Qtr = 1;
+	keep Customer_ID Order_Qtr Total_Sales Num_Months;
+run;
+
+title 'SAS YAY';
+proc print data=work.qtrcustomers;
+	format Total_Sales DOLLAR11.2;
+run;
+title;

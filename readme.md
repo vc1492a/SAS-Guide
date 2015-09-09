@@ -14,10 +14,14 @@ This is an SAS guide that covers the following:
 - Manipulating Data
 - Combining SAS Data Sets
 - Creating Summary Reports
+- Controlling Input and Output
+- Summarizing Data
 
 ###Coming Soon
 
 Suggestions welcome.
+
+- Proc SQL
 
 ###Contributing
 
