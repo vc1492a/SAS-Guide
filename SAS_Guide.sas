@@ -8,6 +8,15 @@
 %let path=FILEPATH;
 libname libref "&path"; 
 
+	/* A little hint. You may want to clear the log prior to running code for easy debugging. */
+	
+dm "clear log";
+
+	/* Or you may want to also clear the reporting window. */
+	
+ods html close;
+ods html;
+
 	/* COMMENTING */
 
 	/* There are two formats for commenting code in sas, block comments (such as this one) and comment statements.
@@ -497,6 +506,77 @@ data newlibref.newdataset;
 	input variable_1 $30. / / /* the first / tells SAS to load the second line of raw data. The second / means the third line. */
 	input variable_2 8. / /* here, the / tells SAS to load the fourth line of raw data */
 run;
+
+	/* The forward slash is known as a relative line pointer control that moves the pointer relative to the line on which it is 
+	currently positioned. There is also an absolute line pointer control that moves the pointer to a specific line in a group of 
+	lines. */
+	
+data newlibref.newdataset;
+	infile "%path/file.fileformat";
+	input #1 variable_1 $40.
+		  #3 variable_2 10.
+run;
+
+	/* When loading in multiple data types, we have to force the SAS to hold the initial data record in the data buffer. Otherwise, 
+	it would use the first data record in checking the conditional statement but would load in the second record into the buffer. 
+	This can be acheived using a trailing @ symbol in the initial input statement. */
+	
+data newlibref.newdataset;
+	infile "&path/file.fileformat";
+	input variable_1 $4. @6 variable_2 $3. @;
+	if variable_2 = 'USA' then
+		input @10 variable_1 mmddyy10.
+			  @20 variable_3 7.;
+	if variable_2 = 'EU' then
+		input @10 variable_1 date9.
+			  @20 variable_3 commax7.;
+run;
+
+	/* Some working examples. */
+	
+data sales_staff2;
+	infile "&path\sales2.dat";
+	input @1 Employee_ID 6.
+		  @21 Last_Name $18. / /* tells SAS to go to the next line */
+		  @1 Job_Title $20.
+		  @22 Hire_Date mmddyy10.
+		  @33 Salary dollar8. / /* tells SAS to ignore data in the 3rd line */
+run;
+
+title 'Sales Staff';
+proc print data=sales_staff2;
+run;
+title;
+
+data US_Sales AU_Sales;
+	drop Country;
+	infile "&path\sales3.dat"
+	input @1 Employee_ID 6.
+		  @21 Last_Name $18. 
+		  @43 Job_Title $20.;
+	input @10 Country $2. @;
+	if Country = 'AU' then
+		do;
+			input @1 Salary commax8.
+				  @24 Hire_Date ddmmyy10.;
+			output AU_Sales;
+		end;
+	else if Country = 'US' then
+		do;
+		  input @1 Salary comma8.
+		        @24 Hire_Date mmddyy10.;
+		  output US_Sales;
+		end;
+run;
+
+title 'AU Sales';
+proc print data=AU_Sales noobs;
+run;
+
+title 'US Sales';
+proc print data=US_Sales noobs;
+run;
+title;
 
 	/* MANIPULATING DATA */
 	
@@ -997,3 +1077,571 @@ proc print data=work.qtrcustomers;
 	format Total_Sales DOLLAR11.2;
 run;
 title;
+
+	/* DATA TRANSFORMATIONS */
+	
+	/* You can use functions in the data step statements anywhere that an expression can appear. SAS 
+	has both character and numeric functions. When using a variable list in the context of a function, 
+	you have to of keyword must precede the variable list. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_3 = sum(of variable_1 - variable_2);
+run;
+
+	/* The substr (substring) function is useful if you want to extract a specific character from the 
+	value of a variable and store it in a new variable. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_3 = substr(variable_1,4,1); /* variable name, starting position, length of substring */
+run;
+
+	/* Note that this function extracts and saves (if outputted) substrings as strings, so if the 
+	substring is numeric you need to declare it as such after using the substring function. */
+	
+	/* The length function could also be useful in certain scenarios and is pretty straight-forward. 
+	This code finds the length of variable_1 and stores it as variable_2. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_2 = length(variable_1);
+run;
+
+	/* You can nest functions in SAS, so you could nest length inside the substring function. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_2 = substr(variable_1,length(variable_1),1);
+run;
+
+	/* Some working examples. */
+	
+data work.codes;
+	set orion.au_salesforce;
+	length FCode1 FCode2 $1. LCode $4.;
+	FCode1=lowcase(substr(First_Name,1,1));
+	FCode2=lowcase(substr(First_Name,length(First_Name),1));
+	LCode=lowcase(substr(Last_Name,1,4));
+run;
+
+title 'Substr Example';
+proc print data=work.codes;
+	var First_Name FCode1 FCode2 Last_Name LCode;
+run;
+title;
+
+data work.competitors;
+	set orion.newcompetitors;
+	length Country $2. Store_Code $6.;
+	Country = substr(ID,1,2);
+	Store_Code = left(substr(ID,3)); /* values justified left */
+	if substr(Store_Code,1,1) = '1';
+	City = propcase(City);
+run;
+	
+title 'Stuff';
+proc print data=work.competitors;
+run;
+title;
+
+data work.states;
+	set orion.contacts;
+	keep ID Name Location;
+	Location = propcase(zipname(substr(address2,length(address2)-4,5))); /* zipname will return the state assoc. with zip */ 
+run;
+
+title 'ZIPS';
+proc print data=work.states;
+run;
+title;
+
+	/* The scan function returns the nth word of a character value. It is used to extract words from a character 
+	value when the relative order of words is known, but their starting positions are not. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	length variable_2 variable_3 $ 15.;
+	variable_2 = scan(variable_1,2,','); /* specified a comma (,) as the delimiter */
+	variable_3 = scan(variable_1,1,',');
+run;
+
+	/* A working example. */
+	
+data work.names;
+	set orion.customers_ex5;
+	length New_Name $50
+		   FMnames $30
+		   Last $30;
+	FMnames = scan(Name,2,',');
+	Last = propcase(scan(Name,1,','));
+	if Gender = "F" then 
+		New_Name = catx(' ','Ms.',FMNames,Last);
+	else if Gender = "M" then
+		New_Name = catx(' ','Mr.',FMNames,Last);
+	keep New_Name Gender;
+run;
+
+title 'Scan and Concat';
+proc print data=work.names;
+run;
+title;
+
+	/* There are some highly useful concatenation functions in SAS. One is the catx function which removes leading and 
+	trailing blanks, inserts delimiters, and returns a concatenated character string. Other concatenation functions 
+	are cat (does not remove the leading or trailing blanks), cats (removes the leading and trailing blanks), 
+	catt (removes the trailing blanks), and catq (uses a delimiter to seperate items and adds a quotation mark to 
+	strings that contain the delimiter). */
+	
+data work.catexample;
+	/* each value has a leading and trailing blank */
+	a = ' a- ';
+	b = ' b ';
+	c = ' c ';
+	cat_example = cat(a,b,c);
+	catx_example = catx(a,b,c);
+	catt_example = catt(a,b,c);
+	cats_example = cats(a,b,c);
+	catq_example = catq('D','-',a,b,c); /* modifiers, delimiter, strings 1 through n */
+run;
+
+proc print data=work.catexample;
+run;
+
+	/* The concatentation operator is another way to join character strings. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_3 = '('!!variable_1!!')' '!!variable_2;
+run;
+
+	/* The find function searches a target string for a specified substring. The below code nests a find function 
+	in an if statement and replaces that substring if the if condition is satisfied. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	if find(string,'substring','modifier', start_position) then
+		do;
+			substr(string, start_position, length) = 'X';
+		end;
+run;
+
+	/* A modifier can have the value 'I' or 'T'. If this modifier is omitted, the search is case sensitive and 
+	trailing blanks are considered. The start_position specifies the position at which the search should start 
+	and the direction of the search. A positive value indicates a right search (negative value indicates left). 
+	If this option is omitted, the search starts at postion 1 and moves forward. */
+	
+	/* The tranwrd function replaces or removes all occurances of a given word (or a pattern of characters) 
+	within a character string. It does not remove trailing blanks from the target or replacement and the 
+	new variable, if not previously specified, has a default length of 200. If the target string is not 
+	found in the source, then no replacement occurs. Using this function to replace an existing string with 
+	a longer string may cause truncation of the length statement is not used. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	length new_variable $20.;
+	new_variable = tranwrd(source_variable, target_variable, replacement);
+run;
+
+	/* Some working examples. */
+	
+data work.silver work.gold work.platinum;
+	set orion.customers_ex5;
+	Customer_ID = tranwrd(Customer_ID, '-00-', '-15-');
+	if find(Customer_ID,'Silver','I') > 0 then output work.silver;
+	if find(Customer_ID,'Gold','I') > 0 then output work.gold;
+	if find(Customer_ID,'Platinum','I') > 0 then output work.platinum;
+	keep Customer_ID Name Country;
+run;
+
+title1 'Find and Tranwrd';
+title2 'Silver';
+proc print data=work.silver;
+run;
+
+title2 'Gold';
+proc print data=work.gold;
+run;
+
+title2 'Platinum';
+proc print data=work.platinum;
+run;
+title;
+
+data work.split;
+	set orion.employee_donations;
+	PctLoc = find(Recipients, '%');
+	if PctLoc > 0 then
+		do;
+			Charity = substr(Recipients,1,PctLoc);
+			output;
+			Charity = substr(Recipients,1,PctLoc + 3);
+			output;
+		end;
+	else
+		do;
+			Charity = trim(Recipients)!! ' 100%';
+			output;
+		end;
+	keep Charity;
+run;
+
+proc print data=work.split;
+run;
+
+data work.supplier;
+	length Supplier_ID $5. Supplier_Name $30. Country $2.;
+	infile 'supply.dat';
+	input Supplier_ID $;
+	Country = scan(_INFILE_,-1,' ');
+	StartCol = find(_INFILE_,' ');
+	EndCol = length(_INFILE_)-2;
+	/* Everything between the first and last blank is the supplier name */
+	Supplier_Name = substr(_INFILE_,StartCol + 1, EndCol - StartCol);
+	drop StartCol EndCol;
+run;
+
+proc print data=work.supplier;
+run;
+
+	/* We may also want to do data transformations on numeric data in SAS. SAS has many functions 
+	that we can use to work with numeric data. One function is the round function, which returns 
+	a value rounded to the nearest multiple of rounding unit. */
+	
+data newlibref.newdataset;
+	new_variable = round(12.69, 0.25);
+	new_variable_2 = round(variable_2, 0.25);
+run;
+
+	/* There are some other numeric functions. The ceil function returns the smallest integer 
+	greater than or equal to the argument. The floor function returns the greatest integer less 
+	than or equal to the argument. The int function returns the integer portion of the argument. */
+	
+data newlibref.newdataset;
+	var_1 = 10.865;
+	Ceil_Var = ceil(var_1);
+	Floor_Var = floor(var_1);
+	Int_Var = floor(var_1);
+run;
+
+	/* We need to know how to convert variable types. Data types can be automatically converted by 
+	SAS or explicity altered with the input and put functions. The input function alters a variable 
+	from character to numeric and the put function alters a numeric variable to a character variable. 
+	
+	SAS automatically converts a character value to a numeric value when the character value is used in 
+	a numeric context, such as assignment to a numeric variable, an arithmetic operation, logical 
+	comparison with a numeric value, and a function that takes numeric arguments. The automatic conversion
+	uses the w. informat and produces a numeric missing value from a character value that does not conform 
+	to standard numeric notation. The where statement does not perform any automatic conversion in 
+	comparisons. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_1b = input(variable_1, 5.); /* source, informat */
+run;
+
+	/* SAS converts a numeric value to a character value automatically when the numeric value is used 
+	in a character context, such as assignment to a character variable, a concatentation operation, and 
+	a function that accepts character arguments. It uses the best12. format and right aligns the 
+	character value. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	variable_1b = put(variable_1,3.); /* source, format */
+run;
+
+	/* Note: the cat family of functions converts any numeric argument to a character string by using 
+	the best12. format and then removing any leading blanks. No note is written to the log. */
+	
+	/* A working example. */
+	
+data shipping_notes;
+  set orion.shipped;
+  length Comment $ 21;
+  Comment = cat('Shipped on ',put(Ship_Date, mmddyy10.));
+  Total = Quantity * input(Price,comma7.);
+run;
+
+proc print data=shipping_notes noobs;
+  format Total dollar7.2;
+run;
+	
+	/* PROCESSING DATA ITERATIVELY */
+	
+	/* You can use an iterative do statement to process data more efficiently. The values of start, 
+	stop, and increment must be numbers or expressions that yield numbers and are established before 
+	executing the loop. The increment defaults to one if omitted from the do statement. */
+	
+data newlibref.newdataset(drop=i);
+	variable_1 = 5000;
+	variable_2 = 0.045;
+	do i=1 to 20;
+		variable_3 + (variable_3 * variable_1) * variable_2;
+	end;
+run;
+
+	/* When working with item lists, the do loop is executed once for each item in the list. The list 
+	must be comma seperated. */
+	
+data newlibref.newdataset(drop = i month odd);
+	do month = 'Jan','Feb','Mar','Apr'; /* character constraints */
+		...
+	end;
+	do odd = 1, 3, 5, 7, 9; /* numeric constraints */
+		...
+	end;
+	do i = var_1, var_2, var_3; /* variables */
+		...
+	end;
+run;
+
+	/* A working example. */
+	
+data future_expenses;
+   drop start stop; 
+   Wages=12874000;
+   Retire=1765000;
+   Medical=649000;
+   start=year(today())+1;
+   stop=start+9;
+  /* do loop here */
+   do year = start to stop;
+      wages = wages * 1.06;
+	  retire = retire * 1.014;
+	  medical = medical * 1.095;
+	  total_cost = sum(wages, retire, medical);
+	  output;
+	end;
+run;
+proc print data=future_expenses;
+   format wages retire medical total_cost comma14.2;
+   var year wages retire medical total_cost;
+run;
+
+	/* Conditional loop statements are super cool! You can use the do until statement or do while 
+	statement to write conditional loop statements. The do until statement executes statements in 
+	a do loop until a condition is true. The value of the expression is evaluated at the bottom of 
+	the loop and the statements in the loop are executed at least once. The do while statement 
+	executes statements in a do loop repetitively while a condition is true. The value of the 
+	expression is evaluated at the top of the loop, not the bottom as in the do until loop. The 
+	statements in the loop never execute if the expression is intially false. */
+	
+	/* Working examples of the do until and do while loops. */
+	
+data work.invest;
+	do year = 1 to 30 until(capital > 250000);
+		capital + 5000;
+		capital + (capital * 0.045);
+	end;
+run;
+
+proc print data=work.invest noobs;
+	format capital dollar14.2;
+run;
+
+do work.invest;
+	do year = 1 to 30 while(capital <= 250000);
+		capital + 5000;
+		capital + (capital * 0.045);
+	end;
+run;
+
+proc print data=work.invest noobs;
+	format capital dollar14.2;
+run;
+
+	/* Nested do loops are also coolio. Below is a working example. It calculates the increase in captital 
+	for each quarter for each year. */
+	
+data work.invest(drop=quarter);
+	do year = 1 to 5;
+		capital + 5000;
+		do quarter = 1 to 4;
+			capital + (capital * (0.045 / 4));
+		end;
+		output;
+	end;
+run;
+
+proc print data=work.invest noobs;
+run;
+
+	/* A couple more examples. */
+	
+data work.expenses;
+	income = 50000000;
+	expenses = 38750000;
+	income_rate = 0.01;
+	expense_rate = 0.02;
+	do year = 1 to 30 until (expenses > income);
+		income = income * 1.01;
+		expenses = expenses * 1.02;
+		output;
+	end;
+run;
+
+proc print data=work.expenses noobs;
+run;
+
+data work.expenses;
+	income = 50000000;
+	expenses = 38750000;
+	income_rate = 0.01;
+	expense_rate = 0.02;
+	do i = 1 to 75;
+		income = income * 1.01;
+		expenses = expenses * 1.02;
+		if expenses > income then leave;
+		output;
+	end;
+run;
+
+proc print data=work.expenses noobs;
+run;
+
+	/* Array processing can simplify programs that perform repetitive calculations, create many variables with 
+	the same attributes, read data, compare variables, and perform a table lookup. A SAS array is a temporary 
+	grouping of SAS variables that are arranged in a particular order and exists only for the duration of the 
+	data step. It must contain all numeric or all character variables. SAS arrays are different from arrays in 
+	most programming languages in that they are not data structures, just a convenient way of temporarily 
+	identifying a group of variables. 
+	
+	The array statement is a compile-time statement that defines the elements in an array and looks something 
+	like this: array contrib{subscript} $ length array-elements. 
+	The $ sign indicates that the elements are character elements and isn't needed when working with numeric 
+	data. The length statement specifies the length of elements in the array that were not previously 
+	assigned a length. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	keep variable_1 variable_2 - variable_5;
+	array contrib{4} variable_2 - variable_5; /* the 4 specifies the number of variables in the array */
+	/* alternatively, use an asterisk (*) in place of the 4 to force SAS to count the amount of 
+	variables in the array list */
+	do i = 1 to 4;
+		contrib{i} = contrib{i} * 1.25;
+	end;
+run;
+
+	/* Some working examples. */
+	
+data work.discount_sales;
+	set orion.orders_midyear;
+	discount = 0.05;
+	array mon{*} Month1 - Month6;
+	do i = 1 to 6;
+		mon{i} = mon{i} * (1 - discount);
+	end;
+	drop i discount;
+run;
+
+proc print data=work.discount_sales;
+run;
+
+data work.special_offer;
+	set orion.orders_midyear;
+	three_mo_discount = 0.10;
+	total_sales = sum(of Month1 - Month6);
+	array mon{*} Month1 - Month3;
+	do i = 1 to 3;
+		mon{i} = mon{i} * (1 - three_mo_discount);
+	end;
+	projected_sales = sum(of Month1 - Month6);
+	difference = total_sales - projected_sales;
+	keep total_sales projected_sales difference;
+	format total_sales projected_sales difference dollar20.2;
+run;
+
+options nodate nonumber;
+proc print data=work.special_offer noobs;
+run;
+
+data work.shabam;
+	set orion.orders_midyear;
+	total_order_amount = 0;
+	months_ordered = 0;
+	array amt{*} month:; /* the colon tells SAS to continue to the end */
+	if dim(amt) < 3 then
+		do;
+			put 'This shit exited';
+			stop;
+		end;
+	do i = 1 to dim(amt);
+		if amt{i} ~= . then months_ordered + 1;
+		total_order_amount + amt{i};
+	end;
+	if total_order_amount > 1000 and months_ordered >= (dim(amt))/2;
+	keep customer_ID months_ordered total_order_amount;
+run;
+
+proc print data=work.shabam;
+	format total_order_amount dollar10.2;
+run;
+
+	/* You can pass SAS arrays to other functions, such as sum or dim. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	arrray val{5:14} variable_5 - variable_14;
+	total_1 = sum(of val{*});
+	do i = 1 to dim(val);
+		val{i} = val{i} * 1.25;
+	end;
+run;
+	
+	/* The hbound and lbound functions can be useful. The hbound returns the upper bound of 
+	an array while lbound returns the lower bound of an array. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	arrray val{*} variable_1 - variable_4;
+	do i = lbound(val) to hbound(val);
+		*process val{i};
+	end;
+run;
+
+	/* In most cases, the lower bound of an array is 1, but the lbound statement is useful when 
+	the lower bound of an array is something other than 1. */
+	
+	/* You can also create variables with the array statement, both character and numeric. */
+	
+data newlibref.newdataset;
+	set libref.dataset;
+	array numeric_array{4}; 
+	/* since the variables are not defined SAS creates 4 numeric variables */
+	array character_array{4} $ 10;
+	/* SAS creates 4 character variables with length 10 */
+	format numeric_array1 - numeric_array4 dollar10.2; /* you can format new variables */
+end;
+
+	/* Sometimes you may want to create a temporary lookup table, or a list of values to refer 
+	to during the data step processing with an initial set of values and the _temporary_ 
+	statement. It's pretty straight-forward. */
+	
+data newlibref.newdataset(drop = i);
+	set libref.dataset;
+	array contrib{4} qtr1 - qtr4;
+	array diff{4};
+	array temp{4} _temporary_ (10,20,30,40); /* tag plus intial values */
+	do i = 1 to 4;
+		diff{i} = sum(contrib{i}, -goal{i}); /* recall sum function ignores missing values */
+run;
+
+	/* A working example. */
+	
+data preferred_cust;
+   set orion.orders_midyear;
+   array Mon{6} Month1-Month6;
+   array target{6} _temporary_ (200,400,300,100,100,200);
+   array over{6};
+   do i = 1 to 6;
+      if mon{i} > target{i} then
+	  	 over{i} = mon{i} - target{i};
+   end;
+   total_over = sum(of over{*});
+   if total_over > 500;
+   keep Customer_ID Over1-Over6 Total_Over;
+run;
+
+proc print data=preferred_cust noobs;
+run;
